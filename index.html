@@ -60,11 +60,13 @@
     }
     .room-btn {
       flex: 1; background: #e9ecef; color: #495057; border: 2px solid transparent;
+      transition: all 0.3s ease;
     }
     .room-btn.active {
       background: linear-gradient(135deg, #667eea, #764ba2);
       color: white;
       border-color: #667eea;
+      transform: scale(1.02);
     }
     .room-btn.public { background: #d4edda; color: #155724; }
     .room-btn.public.active { background: linear-gradient(135deg, #28a745, #20c997); }
@@ -73,6 +75,7 @@
     .join-key-section {
       background: #f8f9fa; border-radius: 12px; padding: 15px;
       margin-top: 15px; border: 1px solid #e0e0e0;
+      animation: fadeSlideIn 0.4s ease;
     }
     .chat-box {
       border: 1px solid #e0e0e0; border-radius: 14px; height: 340px;
@@ -83,16 +86,33 @@
     .messages::-webkit-scrollbar-thumb { background: #ccc; border-radius: 3px; }
     .message {
       margin-bottom: 10px; padding: 10px 14px; border-radius: 14px;
-      max-width: 75%; line-height: 1.5; font-size: 14px; animation: fadeIn 0.2s ease;
+      max-width: 75%; line-height: 1.5; font-size: 14px;
+      animation: messageSlideIn 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
     }
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes messageSlideIn {
+      0% { opacity: 0; transform: translateY(20px) scale(0.95); }
+      100% { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    @keyframes fadeSlideIn {
+      0% { opacity: 0; transform: translateY(-10px); }
+      100% { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); opacity: 0.7; }
+      50% { transform: scale(1.1); opacity: 1; }
+    }
+    @keyframes shimmer {
+      0% { background-position: -1000px 0; }
+      100% { background-position: 1000px 0; }
+    }
     .message.sent { background: linear-gradient(135deg, #667eea, #764ba2); color: white; margin-left: auto; border-bottom-right-radius: 4px; }
     .message.received { background: white; color: #333; border: 1px solid #e8e8e8; border-bottom-left-radius: 4px; }
     .message small { font-size: 10px; opacity: 0.7; display: block; margin-top: 4px; }
     .message.sent small { color: rgba(255,255,255,0.8); }
     .message.received small { color: #999; }
     .chat-input { display: flex; padding: 12px; border-top: 1px solid #e0e0e0; background: white; gap: 10px; }
-    .chat-input input { flex: 1; margin-bottom: 0; }
+    .chat-input input { flex: 1; margin-bottom: 0; transition: all 0.3s; }
+    .chat-input input:focus { transform: translateY(-1px); }
     .badge { display: inline-block; font-size: 10px; padding: 2px 8px; border-radius: 10px; margin-left: 6px; font-weight: 600; }
     .badge-encrypted { background: #ff9800; color: white; }
     .badge-decrypted { background: #4caf50; color: white; }
@@ -108,11 +128,13 @@
     .info-box.success { background: #d4edda; border-color: #c3e6cb; color: #155724; }
     .toggle-group { display: flex; align-items: center; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
     .toggle-group label { display: flex; align-items: center; gap: 8px; font-weight: 500; cursor: pointer; margin-bottom: 0; }
-    .toggle-group input[type="checkbox"] { width: 18px; height: 18px; cursor: pointer; margin-bottom: 0; }
+    .toggle-group input[type="checkbox"] { width: 18px; height: 18px; cursor: pointer; margin-bottom: 0; transition: all 0.2s; }
+    .toggle-group input[type="checkbox"]:checked { transform: scale(1.1); }
     .connection-info {
       display: flex; align-items: center; justify-content: space-between; margin-top: 10px;
       padding: 10px 14px; background: #f8f9fa; border-radius: 10px; border: 1px solid #e8e8e8; font-size: 13px; color: #555;
       flex-wrap: wrap; gap: 10px;
+      transition: all 0.3s;
     }
     .empty-state { text-align: center; color: #aaa; padding: 40px 20px; font-size: 14px; }
     .empty-state .icon { font-size: 40px; margin-bottom: 10px; }
@@ -124,11 +146,77 @@
     .clear-storage-btn {
       background: none; border: none; color: #dc3545;
       cursor: pointer; font-size: 11px; padding: 4px 8px;
+      transition: all 0.3s;
     }
     .clear-storage-btn:hover {
       text-decoration: underline; transform: none;
       box-shadow: none; background: none;
+      color: #c82333;
     }
+    
+    /* User join/leave notification animations */
+    .system-notification {
+      text-align: center;
+      margin: 8px auto;
+      padding: 8px 16px;
+      background: linear-gradient(135deg, #667eea20, #764ba220);
+      border-radius: 20px;
+      font-size: 12px;
+      color: #667eea;
+      display: inline-block;
+      width: auto;
+      animation: notificationPop 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+    }
+    @keyframes notificationPop {
+      0% { opacity: 0; transform: scale(0.8) translateY(-10px); }
+      50% { opacity: 1; transform: scale(1.05) translateY(2px); }
+      100% { opacity: 1; transform: scale(1) translateY(0); }
+    }
+    
+    /* Participant badge animation */
+    .participant-count {
+      transition: all 0.3s ease;
+      display: inline-block;
+    }
+    .participant-count.pulse {
+      animation: countPulse 0.3s ease;
+    }
+    @keyframes countPulse {
+      0% { transform: scale(1); color: #667eea; }
+      50% { transform: scale(1.3); color: #28a745; }
+      100% { transform: scale(1); color: inherit; }
+    }
+    
+    /* Connection status animation */
+    .status {
+      transition: all 0.4s ease;
+    }
+    .status-online {
+      animation: statusFadeIn 0.5s ease;
+    }
+    @keyframes statusFadeIn {
+      0% { opacity: 0; transform: translateY(-5px); }
+      100% { opacity: 1; transform: translateY(0); }
+    }
+    
+    /* Join key section animation */
+    .join-key-section {
+      transition: all 0.3s ease;
+    }
+    .join-key-section:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    
+    /* Participant list item animation */
+    .participant-item {
+      animation: slideInRight 0.3s ease;
+    }
+    @keyframes slideInRight {
+      0% { opacity: 0; transform: translateX(20px); }
+      100% { opacity: 1; transform: translateX(0); }
+    }
+    
     @media (max-width: 600px) {
       .room-selector { flex-direction: column; }
       .message { max-width: 85%; }
@@ -210,7 +298,7 @@
       <div class="connection-info">
         <span><span class="label">Room Type:</span> <strong id="roomTypeLabel">Not selected</strong></span>
         <span><span class="label">Status:</span> <span id="connStatusLabel">Not connected</span></span>
-        <span><span class="label">Participants:</span> <span id="participantCount">0</span></span>
+        <span><span class="label">Participants:</span> <span id="participantCount" class="participant-count">0</span></span>
         <button class="danger" onclick="leaveCurrentRoom()" id="leaveRoomBtn" disabled style="padding: 6px 14px; font-size: 12px;">✕ Leave</button>
       </div>
 
@@ -268,7 +356,7 @@
     let myPeerId = null;
     let currentRoomId = null;
     let currentRoomKey = null;
-    let roomParticipants = new Set();
+    let roomParticipants = new Map(); // Store participant names/IDs
     
     let isEncryptionOn = false;
 
@@ -289,8 +377,59 @@
     const encryptionIndicator = document.getElementById('encryptionIndicator');
     const connStatusLabel = document.getElementById('connStatusLabel');
     const roomTypeLabel = document.getElementById('roomTypeLabel');
-    const participantCount = document.getElementById('participantCount');
+    const participantCountSpan = document.getElementById('participantCount');
 
+    // ==========================================
+    // ANIMATION FUNCTIONS
+    // ==========================================
+    
+    function animateParticipantCount(newCount) {
+      participantCountSpan.classList.remove('pulse');
+      void participantCountSpan.offsetWidth; // Force reflow
+      participantCountSpan.classList.add('pulse');
+      participantCountSpan.textContent = newCount;
+      setTimeout(() => {
+        participantCountSpan.classList.remove('pulse');
+      }, 300);
+    }
+    
+    function addNotificationWithAnimation(text, isJoin = true) {
+      if (messagesEl.children.length === 1 && messagesEl.children[0].classList.contains('empty-state')) {
+        messagesEl.innerHTML = '';
+      }
+      
+      const notifDiv = document.createElement('div');
+      notifDiv.style.display = 'flex';
+      notifDiv.style.justifyContent = 'center';
+      notifDiv.style.margin = '8px 0';
+      
+      const badge = document.createElement('div');
+      badge.className = 'system-notification';
+      
+      const icon = isJoin ? '👤' : '🚪';
+      const color = isJoin ? '#28a745' : '#dc3545';
+      badge.style.background = isJoin ? 'linear-gradient(135deg, #28a74520, #20c99720)' : 'linear-gradient(135deg, #dc354520, #c8233320)';
+      badge.style.color = color;
+      badge.innerHTML = `${icon} ${text}`;
+      
+      notifDiv.appendChild(badge);
+      messagesEl.appendChild(notifDiv);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+      
+      // Remove animation class after animation ends
+      setTimeout(() => {
+        badge.style.animation = 'none';
+      }, 400);
+    }
+    
+    function animateStatusChange(state, message) {
+      statusEl.style.animation = 'none';
+      void statusEl.offsetWidth;
+      statusEl.className = `status status-${state}`;
+      statusEl.innerHTML = message;
+      statusEl.style.animation = 'statusFadeIn 0.5s ease';
+    }
+    
     // ==========================================
     // MESSAGE STORAGE
     // ==========================================
@@ -494,16 +633,15 @@
       
       peer.on('error', (err) => {
         console.error('Peer error:', err);
-        updateStatus('offline', '❌ Connection error');
+        animateStatusChange('offline', '❌ Connection error');
       });
     }
 
     function setupPublicRoom() {
-      updateStatus('online', '🟢 Public Room Ready');
+      animateStatusChange('online', '🟢 Public Room Ready');
       document.getElementById('publicRoomId').textContent = myPeerId;
       currentRoomId = myPeerId;
       
-      // Generate a join key if not exists
       if (!currentRoomKey) {
         generateJoinKey();
       }
@@ -573,17 +711,16 @@
       currentConnections.push(conn);
       
       conn.on('open', () => {
-        updateStatus('online', `🟢 Connected to public room`);
+        animateStatusChange('online', `🟢 Connected to public room`);
         connStatusLabel.textContent = 'Connected to room';
         roomTypeLabel.textContent = 'Public Room';
         enableChat(true);
         leaveRoomBtn.disabled = false;
         
-        // Send join key for verification
         conn.send({ type: 'auth', key: joinKey });
         
         loadMessagesForCurrentRoom();
-        addSystemMessage(`✅ Joined public room! Share messages with all participants.`);
+        addNotificationWithAnimation('You joined the public room!', true);
       });
       
       conn.on('data', async (data) => {
@@ -591,9 +728,9 @@
       });
       
       conn.on('close', () => {
-        addSystemMessage('🔌 A participant left the room');
+        addNotificationWithAnimation('A participant left the room', false);
         roomParticipants.delete(conn.peer);
-        updateParticipantCount();
+        updateParticipantCount(roomParticipants.size);
       });
     }
 
@@ -605,9 +742,10 @@
           if (data.key === currentRoomKey) {
             authenticated = true;
             currentConnections.push(conn);
-            roomParticipants.add(conn.peer);
-            updateParticipantCount();
-            addSystemMessage(`👤 New participant joined the room!`);
+            const participantId = conn.peer.substring(0, 12);
+            roomParticipants.set(conn.peer, participantId);
+            updateParticipantCount(roomParticipants.size);
+            addNotificationWithAnimation(`✨ ${participantId} joined the room!`, true);
             conn.send({ type: 'auth_success', message: 'Authenticated!' });
           } else {
             conn.send({ type: 'auth_fail', message: 'Invalid join key' });
@@ -661,8 +799,10 @@
       });
     }
 
-    function updateParticipantCount() {
-      participantCount.textContent = roomParticipants.size + 1;
+    function updateParticipantCount(count) {
+      animateParticipantCount(count);
+      const text = count === 0 ? '0' : count.toString();
+      participantCountSpan.textContent = text;
     }
 
     // ==========================================
@@ -686,7 +826,7 @@
       });
       
       peer.on('open', () => {
-        updateStatus('online', '🟢 Private Room Ready');
+        animateStatusChange('online', '🟢 Private Room Ready');
         connStatusLabel.textContent = 'Waiting for connection';
         currentRoomId = randomId;
       });
@@ -731,14 +871,14 @@
       currentRoomId = targetId;
       
       conn.on('open', () => {
-        updateStatus('online', `✅ Connected to ${targetId.substring(0, 12)}...`);
+        animateStatusChange('online', `✅ Connected to ${targetId.substring(0, 12)}...`);
         connStatusLabel.textContent = 'Connected to peer';
         roomTypeLabel.textContent = 'Private 1-on-1';
         enableChat(true);
         leaveRoomBtn.disabled = false;
-        participantCount.textContent = '2';
+        animateParticipantCount(2);
         loadMessagesForCurrentRoom();
-        addSystemMessage('🔐 Connected to peer! Start chatting securely.');
+        addNotificationWithAnimation(`Connected to peer! Start chatting securely.`, true);
       });
       
       conn.on('data', async (data) => {
@@ -746,30 +886,30 @@
       });
       
       conn.on('close', () => {
-        addSystemMessage('🔌 Peer disconnected');
-        participantCount.textContent = '1';
+        addNotificationWithAnimation(`Peer disconnected`, false);
+        animateParticipantCount(1);
       });
     }
 
     function handlePrivateConnection(conn) {
       privateConnection = conn;
       currentRoomId = conn.peer;
-      participantCount.textContent = '2';
+      animateParticipantCount(2);
       
-      updateStatus('online', `✅ Connected to ${conn.peer.substring(0, 12)}...`);
+      animateStatusChange('online', `✅ Connected to ${conn.peer.substring(0, 12)}...`);
       connStatusLabel.textContent = 'Connected to peer';
       enableChat(true);
       leaveRoomBtn.disabled = false;
       loadMessagesForCurrentRoom();
-      addSystemMessage('🔐 Connected to peer! Start chatting securely.');
+      addNotificationWithAnimation(`Peer connected! Start chatting securely.`, true);
       
       conn.on('data', async (data) => {
         await receivePrivateMessage(data);
       });
       
       conn.on('close', () => {
-        addSystemMessage('🔌 Peer disconnected');
-        participantCount.textContent = '1';
+        addNotificationWithAnimation(`Peer disconnected`, false);
+        animateParticipantCount(1);
       });
     }
 
@@ -899,13 +1039,13 @@
         });
         currentConnections = [];
         roomParticipants.clear();
+        updateParticipantCount(0);
       } else if (currentRoomType === 'private' && privateConnection) {
         privateConnection.close();
         privateConnection = null;
       }
       
       currentRoomId = null;
-      participantCount.textContent = '0';
       connStatusLabel.textContent = 'Not connected';
       enableChat(false);
       leaveRoomBtn.disabled = true;
@@ -918,6 +1058,8 @@
           <div style="font-size: 12px; margin-top: 6px;">Select a room to start chatting.</div>
         </div>
       `;
+      
+      animateParticipantCount(0);
     }
 
     // ==========================================
@@ -925,8 +1067,7 @@
     // ==========================================
 
     function updateStatus(state, message) {
-      statusEl.className = `status status-${state}`;
-      statusEl.innerHTML = message;
+      animateStatusChange(state, message);
     }
 
     function enableChat(enabled) {
@@ -991,7 +1132,6 @@
       encryptionIndicator.style.color = isEncryptionOn ? '#28a745' : '#999';
     });
 
-    // Set default secret key input handlers
     window.generateKey = generateKey;
     window.toggleKeyVisibility = toggleKeyVisibility;
 
@@ -999,7 +1139,6 @@
     // INITIALIZATION
     // ==========================================
 
-    // Set default to public room
     selectRoomType('public');
   </script>
 </body>
