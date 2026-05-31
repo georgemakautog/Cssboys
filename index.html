@@ -98,13 +98,26 @@
       background: #1a1a2e; color: #00ff88; padding: 12px; border-radius: 8px;
       font-family: monospace; font-size: 12px; margin-top: 8px; word-break: break-all;
     }
+    .storage-info {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 8px 12px; background: #e9ecef; border-radius: 10px;
+      font-size: 11px; color: #666; margin-top: 12px;
+    }
+    .clear-storage-btn {
+      background: none; border: none; color: #dc3545;
+      cursor: pointer; font-size: 11px; padding: 4px 8px;
+    }
+    .clear-storage-btn:hover {
+      text-decoration: underline; transform: none;
+      box-shadow: none; background: none;
+    }
   </style>
 </head>
 <body>
   <div class="container">
     <div class="card">
       <h1>🔐 P2P Secret Messenger</h1>
-      <div class="subtitle">End-to-End Encrypted • AES-256-GCM • Real-time P2P</div>
+      <div class="subtitle">End-to-End Encrypted • AES-256-GCM • Real-time P2P • Messages persist 24h</div>
 
       <div class="status status-offline" id="status">🔴 Disconnected — Initializing...</div>
 
@@ -145,6 +158,11 @@
         <span><span class="label">Peer:</span> <span id="connectedPeerLabel">None</span></span>
         <button class="danger" onclick="disconnect()" id="disconnectBtn" disabled style="padding: 6px 14px; font-size: 12px;">✕ Disconnect</button>
       </div>
+
+      <div class="storage-info">
+        <span>💾 Messages persist through refresh • Auto-delete after 24 hours</span>
+        <button class="clear-storage-btn" onclick="clearAllMessages()">🗑️ Clear All</button>
+      </div>
     </div>
 
     <div class="card">
@@ -179,7 +197,7 @@
 
       <div class="info-box" style="margin-top: 10px;">
         💡 <strong>Tip:</strong> Turn on encryption and enter the same secret key on both sides.
-        Messages are encrypted with AES-256-GCM before sending. Without the key, messages appear as garbage.
+        Messages are encrypted with AES-256-GCM before sending. Messages survive refresh and auto-delete after 24 hours.
       </div>
     </div>
   </div>
@@ -195,6 +213,10 @@
     let connectedPeerId = null;
     let isConnected = false;
     let isEncryptionOn = false;
+
+    // Storage key for messages
+    const STORAGE_KEY = 'p2p_chat_messages';
+    const EXPIRY_HOURS = 24;
 
     // DOM refs
     const statusEl = document.getElementById('status');
@@ -212,7 +234,118 @@
     const connectedPeerLabel = document.getElementById('connectedPeerLabel');
 
     // ==========================================
-    // AES-256-GCM ENCRYPTION using Web Crypto API
+    // MESSAGE STORAGE (Persistent + 24h expiry)
+    // ==========================================
+
+    function saveMessage(messageData) {
+      let messages = getStoredMessages();
+      messages.push({
+        ...messageData,
+        id: Date.now() + '_' + Math.random().toString(36).substr(2, 9),
+        timestamp: Date.now(),
+        expiry: Date.now() + (EXPIRY_HOURS * 60 * 60 * 1000)
+      });
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(messages));
+      return messages;
+    }
+
+    function getStoredMessages() {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (!stored) return [];
+      
+      let messages = JSON.parse(stored);
+      const now = Date.now();
+      
+      // Filter out expired messages (>24 hours old)
+      const validMessages = messages.filter(msg => msg.expiry > now);
+      
+      if (validMessages.length !== messages.length) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(validMessages));
+      }
+      
+      return validMessages;
+    }
+
+    function loadMessagesFromStorage() {
+      const messages = getStoredMessages();
+      if (messages.length > 0) {
+        clearMessagesUI();
+        // Sort by timestamp
+        messages.sort((a, b) => a.timestamp - b.timestamp);
+        messages.forEach(msg => {
+          renderMessageFromStorage(msg);
+        });
+        return messages.length;
+      }
+      return 0;
+    }
+
+    function renderMessageFromStorage(msg) {
+      // Clear empty state
+      if (messagesEl.children.length === 1 && messagesEl.children[0].classList.contains('empty-state')) {
+        messagesEl.innerHTML = '';
+      }
+      
+      const msgDiv = document.createElement('div');
+      msgDiv.className = `message ${msg.type}`;
+      msgDiv.setAttribute('data-message-id', msg.id);
+      
+      const time = new Date(msg.timestamp).toLocaleTimeString();
+      
+      let badge = '';
+      if (msg.wasEncrypted && msg.type === 'sent') {
+        badge = '<span class="badge badge-encrypted">🔒 Encrypted</span>';
+      } else if (msg.wasEncrypted && msg.type === 'received' && !msg.decryptionFailed) {
+        badge = '<span class="badge badge-decrypted">🔓 Decrypted</span>';
+      } else if (msg.decryptionFailed) {
+        badge = '<span class="badge badge-warning">⚠️ Key issue</span>';
+      }
+      
+      msgDiv.innerHTML = `${escapeHtml(msg.text)}<small>${time} ${badge}</small>`;
+      messagesEl.appendChild(msgDiv);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    function clearMessagesUI() {
+      messagesEl.innerHTML = '';
+    }
+
+    function clearAllMessages() {
+      if (confirm('⚠️ Delete ALL messages? This cannot be undone.')) {
+        localStorage.removeItem(STORAGE_KEY);
+        clearMessagesUI();
+        addSystemMessage('🗑️ All messages cleared');
+        // Show empty state
+        if (messagesEl.children.length === 0) {
+          messagesEl.innerHTML = `
+            <div class="empty-state">
+              <div class="icon">💬</div>
+              <div>No messages yet.</div>
+              <div style="font-size: 12px; margin-top: 6px;">Start chatting to see messages here.</div>
+            </div>
+          `;
+        }
+      }
+    }
+
+    // Run expiry check every hour
+    setInterval(() => {
+      const oldCount = getStoredMessages().length;
+      getStoredMessages(); // This triggers cleanup
+      const newCount = getStoredMessages().length;
+      if (oldCount !== newCount) {
+        // Reload messages if any were deleted
+        const currentMessages = [...messagesEl.querySelectorAll('.message')];
+        if (currentMessages.length > 0) {
+          clearMessagesUI();
+          loadMessagesFromStorage();
+          addSystemMessage(`🕐 Messages older than ${EXPIRY_HOURS} hours automatically deleted`);
+        }
+      }
+    }, 60 * 60 * 1000); // Check every hour
+
+    // ==========================================
+    // AES-256-GCM ENCRYPTION
     // ==========================================
 
     async function deriveKey(password, salt) {
@@ -310,7 +443,6 @@
       }
     }
 
-    // Initialize PeerJS
     function initPeer() {
       const randomId = generatePeerId();
       myPeerId = randomId;
@@ -328,6 +460,11 @@
       peer.on('open', () => {
         updateStatus('online', '🟢 Online - Ready to connect');
         connStatusLabel.textContent = 'Online';
+        // Load saved messages
+        const msgCount = loadMessagesFromStorage();
+        if (msgCount > 0) {
+          addSystemMessage(`📜 Loaded ${msgCount} saved message(s) from storage`);
+        }
       });
       
       peer.on('connection', (conn) => {
@@ -366,7 +503,6 @@
       enableChat(true);
       disconnectBtn.disabled = false;
       connectBtn.disabled = true;
-      clearMessages();
       addSystemMessage('🔐 Connected to peer! Start chatting securely.');
       
       conn.on('data', async (data) => {
@@ -419,7 +555,6 @@
         enableChat(true);
         disconnectBtn.disabled = false;
         connectBtn.disabled = true;
-        clearMessages();
         addSystemMessage('🔐 Connected to peer! Start chatting securely.');
       });
       
@@ -501,6 +636,15 @@
         timestamp: Date.now()
       });
       
+      // Save and display sent message
+      const messageData = {
+        text: message,
+        type: 'sent',
+        wasEncrypted: wasEncrypted,
+        decryptionFailed: false,
+        timestamp: Date.now()
+      };
+      saveMessage(messageData);
       displayMessage(message, 'sent', wasEncrypted);
       chatInput.value = '';
     }
@@ -526,10 +670,20 @@
         }
       }
       
+      // Save received message
+      const messageData = {
+        text: displayText,
+        type: 'received',
+        wasEncrypted: encrypted,
+        decryptionFailed: decryptionFailed,
+        timestamp: Date.now()
+      };
+      saveMessage(messageData);
       displayMessage(displayText, 'received', encrypted, decryptionFailed);
     }
     
     function displayMessage(text, type, wasEncrypted = false, decryptionFailed = false) {
+      // Clear empty state
       if (messagesEl.children.length === 1 && messagesEl.children[0].classList.contains('empty-state')) {
         messagesEl.innerHTML = '';
       }
@@ -567,10 +721,6 @@
       messagesEl.scrollTop = messagesEl.scrollHeight;
     }
     
-    function clearMessages() {
-      messagesEl.innerHTML = '';
-    }
-    
     function escapeHtml(text) {
       const div = document.createElement('div');
       div.textContent = text;
@@ -601,7 +751,7 @@
         position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
         background: #333; color: white; padding: 14px 24px; border-radius: 10px;
         font-size: 14px; z-index: 9999; box-shadow: 0 10px 40px rgba(0,0,0,0.3);
-        animation: fadeIn 0.3s ease; max-width: 90%;
+        animation: fadeIn 0.3s ease; max-width: 90%; z-index: 10000;
       `;
       div.textContent = msg;
       document.body.appendChild(div);
