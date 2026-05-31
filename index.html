@@ -104,25 +104,25 @@
   <div class="container">
     <div class="card">
       <h1>🔐 P2P Secret Messenger</h1>
-      <div class="subtitle">End-to-End Encrypted • AES-256-GCM • Real-time</div>
+      <div class="subtitle">End-to-End Encrypted • AES-256-GCM • Real-time P2P</div>
 
       <div class="status status-offline" id="status">🔴 Disconnected — Initializing...</div>
 
       <div class="peer-id-box">
-        <strong>📱 YOUR ROOM ID — Share this to let others connect</strong>
+        <strong>📱 YOUR PEER ID — Share this to connect directly</strong>
         <div class="peer-id" id="myPeerId">Generating...</div>
         <div class="flex-row" style="margin-top: 12px; justify-content: center;">
-          <button onclick="copyRoomId()">📋 Copy Room ID</button>
-          <button class="secondary" onclick="generateNewRoom()">🔄 New Room</button>
+          <button onclick="copyPeerId()">📋 Copy Peer ID</button>
+          <button class="secondary" onclick="generateNewPeerId()">🔄 New ID</button>
         </div>
       </div>
 
       <div class="grid-2">
         <div class="input-group">
-          <label>🔗 Join a Room</label>
+          <label>🔗 Connect to Peer</label>
           <div class="flex-row">
-            <input type="text" id="targetRoomId" placeholder="Paste Room ID here...">
-            <button onclick="joinRoom()" id="joinBtn">Join</button>
+            <input type="text" id="targetPeerId" placeholder="Paste Peer ID here...">
+            <button onclick="connectToPeer()" id="connectBtn">Connect</button>
           </div>
         </div>
         <div class="input-group">
@@ -141,9 +141,9 @@
       </div>
 
       <div class="connection-info">
-        <span><span class="label">Room:</span> <span id="roomLabel">Not joined</span></span>
-        <span><span class="label">Users:</span> <span id="usersOnline">0</span></span>
-        <button class="danger" onclick="leaveRoom()" id="leaveBtn" disabled style="padding: 6px 14px; font-size: 12px;">✕ Leave</button>
+        <span><span class="label">Connection:</span> <span id="connStatusLabel">Not connected</span></span>
+        <span><span class="label">Peer:</span> <span id="connectedPeerLabel">None</span></span>
+        <button class="danger" onclick="disconnect()" id="disconnectBtn" disabled style="padding: 6px 14px; font-size: 12px;">✕ Disconnect</button>
       </div>
     </div>
 
@@ -159,12 +159,12 @@
         <div class="messages" id="messages">
           <div class="empty-state">
             <div class="icon">💬</div>
-            <div>Not connected to any room.</div>
-            <div style="font-size: 12px; margin-top: 6px;">Create or join a room to start chatting.</div>
+            <div>Not connected to any peer.</div>
+            <div style="font-size: 12px; margin-top: 6px;">Share your Peer ID and connect to start chatting.</div>
           </div>
         </div>
         <div class="chat-input">
-          <input type="text" id="chatInput" placeholder="Join a room first..." disabled>
+          <input type="text" id="chatInput" placeholder="Connect to a peer first..." disabled>
           <button onclick="sendMessage()" id="sendBtn" disabled>Send</button>
         </div>
       </div>
@@ -184,25 +184,17 @@
     </div>
   </div>
 
-  <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
+  <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
   <script>
     // ==========================================
-    // CONFIGURATION
+    // P2P CONFIGURATION
     // ==========================================
-    // Using a public WebSocket relay server for signaling
-    // Messages are ephemeral — not stored permanently
-    const RELAY_SERVER = 'wss://socket-pentest-server.glitch.me';
-    // If the above doesn't work, fall back to this:
-    // const RELAY_SERVER = 'wss://relay.socket.io';
-
-    // ==========================================
-    // STATE
-    // ==========================================
-    let socket = null;
-    let currentRoom = null;
-    let myUserId = null;
+    let peer = null;
+    let currentConnection = null;
+    let myPeerId = null;
+    let connectedPeerId = null;
+    let isConnected = false;
     let isEncryptionOn = false;
-    let roomUsers = new Set();
 
     // DOM refs
     const statusEl = document.getElementById('status');
@@ -210,15 +202,14 @@
     const messagesEl = document.getElementById('messages');
     const chatInput = document.getElementById('chatInput');
     const sendBtn = document.getElementById('sendBtn');
-    const joinBtn = document.getElementById('joinBtn');
-    const leaveBtn = document.getElementById('leaveBtn');
+    const connectBtn = document.getElementById('connectBtn');
+    const disconnectBtn = document.getElementById('disconnectBtn');
     const secretKeyInput = document.getElementById('secretKey');
     const encryptCheckbox = document.getElementById('encryptMessages');
     const encryptionStatus = document.getElementById('encryptionStatus');
     const encryptionIndicator = document.getElementById('encryptionIndicator');
-    const roomLabel = document.getElementById('roomLabel');
-    const usersOnline = document.getElementById('usersOnline');
     const connStatusLabel = document.getElementById('connStatusLabel');
+    const connectedPeerLabel = document.getElementById('connectedPeerLabel');
 
     // ==========================================
     // AES-256-GCM ENCRYPTION using Web Crypto API
@@ -249,7 +240,6 @@
         key,
         enc.encode(plaintext)
       );
-      // Combine salt + iv + ciphertext
       const combined = new Uint8Array(salt.length + iv.length + encrypted.byteLength);
       combined.set(salt, 0);
       combined.set(iv, salt.length);
@@ -277,36 +267,35 @@
     }
 
     // ==========================================
-    // ROOM MANAGEMENT (via WebSocket relay)
+    // PEER CONNECTION
     // ==========================================
 
-    function generateRoomId() {
+    function generatePeerId() {
       const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
       let id = '';
       for (let i = 0; i < 8; i++) {
         id += chars.charAt(Math.floor(Math.random() * chars.length));
       }
-      return id;
+      return 'p2p_' + id;
     }
 
-    function generateNewRoom() {
-      const roomId = generateRoomId();
-      myPeerIdEl.textContent = roomId;
-      document.getElementById('targetRoomId').value = roomId;
-      joinRoom();
+    function generateNewPeerId() {
+      const newId = generatePeerId();
+      myPeerIdEl.textContent = newId;
+      showAlert('New Peer ID generated! Share this to connect.');
     }
 
-    function copyRoomId() {
-      const roomId = myPeerIdEl.textContent;
-      if (roomId && roomId !== 'Generating...') {
-        navigator.clipboard.writeText(roomId);
-        showAlert('Room ID copied! Share it with your chat partner.');
+    function copyPeerId() {
+      const peerId = myPeerIdEl.textContent;
+      if (peerId && peerId !== 'Generating...') {
+        navigator.clipboard.writeText(peerId);
+        showAlert('Peer ID copied! Share it with your chat partner.');
       }
     }
 
     function generateKey() {
       const key = Array.from(crypto.getRandomValues(new Uint8Array(16)))
-        .map(b => String.fromCharCode(33 + (b % 89))) // Printable ASCII
+        .map(b => String.fromCharCode(33 + (b % 89)))
         .join('');
       secretKeyInput.value = key;
     }
@@ -321,160 +310,175 @@
       }
     }
 
-    // ==========================================
-    // SOCKET.IO CONNECTION
-    // ==========================================
-
-    function connectSocket() {
-      updateStatus('connecting', '🟡 Connecting to relay server...');
-
-      socket = io(RELAY_SERVER, {
-        transports: ['websocket'],
-        reconnection: true,
-        reconnectionAttempts: 10,
-        reconnectionDelay: 2000,
-        timeout: 10000
+    // Initialize PeerJS
+    function initPeer() {
+      const randomId = generatePeerId();
+      myPeerId = randomId;
+      myPeerIdEl.textContent = randomId;
+      
+      updateStatus('connecting', '🟡 Connecting to P2P network...');
+      
+      peer = new Peer(randomId, {
+        host: '0.peerjs.com',
+        port: 443,
+        secure: true,
+        path: '/'
       });
-
-      socket.on('connect', () => {
-        myUserId = socket.id;
-        updateStatus('online', `🟢 Connected to relay (ID: ${myUserId.substring(0, 8)}...)`);
-        connStatusLabel.textContent = 'Connected to relay';
-
-        // Generate a room ID
-        if (!currentRoom) {
-          const roomId = generateRoomId();
-          myPeerIdEl.textContent = roomId;
-        }
-
-        enableJoin(true);
+      
+      peer.on('open', () => {
+        updateStatus('online', '🟢 Online - Ready to connect');
+        connStatusLabel.textContent = 'Online';
       });
-
-      socket.on('disconnect', () => {
-        updateStatus('offline', '🔴 Disconnected from relay');
-        connStatusLabel.textContent = 'Disconnected';
-        enableJoin(false);
-        if (currentRoom) {
-          leaveRoom();
+      
+      peer.on('connection', (conn) => {
+        console.log('Incoming connection from:', conn.peer);
+        handleConnection(conn);
+      });
+      
+      peer.on('error', (err) => {
+        console.error('Peer error:', err);
+        if (err.type === 'peer-unavailable') {
+          updateStatus('offline', '❌ Peer not found');
+        } else if (err.type === 'network') {
+          updateStatus('offline', '❌ Network error - Check connection');
+        } else {
+          updateStatus('offline', '❌ Error: ' + err.message);
         }
       });
-
-      socket.on('connect_error', (err) => {
-        updateStatus('offline', `🔴 Connection error: ${err.message}`);
-        connStatusLabel.textContent = 'Error connecting';
-      });
-
-      // Room events
-      socket.on('room-joined', (data) => {
-        currentRoom = data.room;
-        roomLabel.textContent = data.room;
-        updateStatus('online', `🟢 Joined room: ${data.room}`);
-        enableChat(true);
-        leaveBtn.disabled = false;
-        joinBtn.disabled = true;
-        clearMessages();
-        addSystemMessage(`✅ Joined room "${data.room}". Share this room ID with your chat partner.`);
-        
-        // Request current users
-        socket.emit('get-users', { room: data.room });
-      });
-
-      socket.on('room-users', (data) => {
-        roomUsers = new Set(data.users);
-        usersOnline.textContent = roomUsers.size;
-      });
-
-      socket.on('user-joined', (data) => {
-        roomUsers.add(data.userId);
-        usersOnline.textContent = roomUsers.size;
-        addSystemMessage(`👤 User joined the room. Total: ${roomUsers.size}`);
-      });
-
-      socket.on('user-left', (data) => {
-        roomUsers.delete(data.userId);
-        usersOnline.textContent = roomUsers.size;
-        if (roomUsers.size > 0) {
-          addSystemMessage(`👤 User left the room. Total: ${roomUsers.size}`);
+      
+      peer.on('disconnected', () => {
+        if (isConnected) {
+          disconnect();
         }
-      });
-
-      socket.on('room-message', async (data) => {
-        const { text, encrypted, sender } = data;
-        let displayText = text;
-        let wasEncrypted = encrypted;
-        let decryptionFailed = false0;
-
-        if (encrypted && encryptCheckbox.checked) {
-          const key = secretKeyInput.value;
-          if (key) {
-            const decrypted = await decryptMessage(text, key);
-            if (decrypted) {
-              displayText = decrypted;
-            } else {
-              displayText = '🔒 [Decryption failed — wrong key or corrupted]';
-              decryptionFailed = true;
-            }
-          } else {
-            displayText = '🔒 [Encrypted — enter secret key to decrypt]';
-            decryptionFailed = true;
-          }
-        }
-
-        displayMessage(displayText, 'received', wasEncrypted, decryptionFailed season);
-      });
-
-      socket.on('error', (err) => {
-        addSystemMessage(`❌ Error: ${err.message || err}`);
+        updateStatus('offline', '🔴 Disconnected - Reconnecting...');
+        peer.reconnect();
       });
     }
-
-    function joinRoom() {
-      const roomId = document.getElementById('targetRoomId').value.trim() || myPeerIdEl.textContent;
-      if (!roomId) {
-        showAlert('Please enter or generate a Room ID');
-        return;
-      }
-      if (!socket || !socket.connected) {
-        showAlert('Not connected to relay server. Waiting...');
-        return;
-      }
-      socket.emit('join-room', { room: roomId });
-      myPeerIdEl.textContent = roomId;
-      currentRoom = roomId;
-      roomLabel.textContent = roomId;
-    }
-
-    function leaveRoom() {
-      if (socket && currentRoom) {
-        socket.emit('leave-room', { room: currentRoom });
-      }
-      currentRoom = null;
-      roomLabel.textContent = 'Not joined';
-      usersOnline.textContent = '0';
-      enableChat(false);
-      leaveBtn.disabled = true;
-      joinBtn.disabled = false;
+    
+    function handleConnection(conn) {
+      currentConnection = conn;
+      connectedPeerId = conn.peer;
+      isConnected = true;
+      
+      updateStatus('online', `✅ Connected to ${conn.peer.substring(0, 12)}...`);
+      connStatusLabel.textContent = 'Connected to peer';
+      connectedPeerLabel.textContent = conn.peer.substring(0, 16) + '...';
+      enableChat(true);
+      disconnectBtn.disabled = false;
+      connectBtn.disabled = true;
       clearMessages();
-      addSystemMessage('🚪 Left the room');
-      updateStatus('online', '🟢 Connected to relay (not in room)');
+      addSystemMessage('🔐 Connected to peer! Start chatting securely.');
+      
+      conn.on('data', async (data) => {
+        await receiveMessage(data);
+      });
+      
+      conn.on('close', () => {
+        disconnect();
+      });
+      
+      conn.on('error', (err) => {
+        console.error('Connection error:', err);
+        addSystemMessage('❌ Connection error occurred');
+      });
     }
-
+    
+    function connectToPeer() {
+      const targetId = document.getElementById('targetPeerId').value.trim();
+      
+      if (!targetId) {
+        showAlert('Please enter a Peer ID to connect to');
+        return;
+      }
+      
+      if (targetId === myPeerIdEl.textContent) {
+        showAlert('You cannot connect to yourself!');
+        return;
+      }
+      
+      if (!peer) {
+        showAlert('Still initializing, please wait...');
+        return;
+      }
+      
+      updateStatus('connecting', '🟡 Connecting to peer...');
+      
+      const conn = peer.connect(targetId, {
+        reliable: true,
+        serialization: 'json'
+      });
+      
+      currentConnection = conn;
+      connectedPeerId = targetId;
+      
+      conn.on('open', () => {
+        isConnected = true;
+        updateStatus('online', `✅ Connected to ${targetId.substring(0, 12)}...`);
+        connStatusLabel.textContent = 'Connected to peer';
+        connectedPeerLabel.textContent = targetId.substring(0, 16) + '...';
+        enableChat(true);
+        disconnectBtn.disabled = false;
+        connectBtn.disabled = true;
+        clearMessages();
+        addSystemMessage('🔐 Connected to peer! Start chatting securely.');
+      });
+      
+      conn.on('data', async (data) => {
+        await receiveMessage(data);
+      });
+      
+      conn.on('close', () => {
+        disconnect();
+      });
+      
+      conn.on('error', (err) => {
+        console.error('Connection error:', err);
+        updateStatus('offline', '❌ Connection failed');
+        addSystemMessage('❌ Failed to connect to peer');
+        disconnect();
+      });
+      
+      setTimeout(() => {
+        if (!isConnected && currentConnection === conn) {
+          updateStatus('offline', '❌ Connection timeout');
+          addSystemMessage('❌ Connection timed out. Make sure the peer is online.');
+          disconnect();
+        }
+      }, 15000);
+    }
+    
+    function disconnect() {
+      if (currentConnection) {
+        currentConnection.close();
+        currentConnection = null;
+      }
+      isConnected = false;
+      connectedPeerId = null;
+      updateStatus('online', '🟢 Online - Ready to connect');
+      connStatusLabel.textContent = 'Online (not connected)';
+      connectedPeerLabel.textContent = 'None';
+      enableChat(false);
+      disconnectBtn.disabled = true;
+      connectBtn.disabled = false;
+      addSystemMessage('🔌 Disconnected from peer');
+    }
+    
     // ==========================================
     // MESSAGING
     // ==========================================
-
+    
     async function sendMessage() {
-      if (!currentRoom || !socket) {
-        showAlert('Join a room first!');
+      if (!isConnected || !currentConnection) {
+        showAlert('Connect to a peer first!');
         return;
       }
-
+      
       const message = chatInput.value.trim();
       if (!message) return;
-
+      
       let finalMessage = message;
       let wasEncrypted = false;
-
+      
       if (encryptCheckbox.checked) {
         const key = secretKeyInput.value;
         if (!key) {
@@ -490,27 +494,50 @@
           return;
         }
       }
-
-      socket.emit('room-message', {
-        room: currentRoom,
+      
+      currentConnection.send({
         text: finalMessage,
-        encrypted: wasEncrypted
+        encrypted: wasEncrypted,
+        timestamp: Date.now()
       });
-
+      
       displayMessage(message, 'sent', wasEncrypted);
       chatInput.value = '';
     }
-
+    
+    async function receiveMessage(data) {
+      const { text, encrypted } = data;
+      let displayText = text;
+      let decryptionFailed = false;
+      
+      if (encrypted && encryptCheckbox.checked) {
+        const key = secretKeyInput.value;
+        if (key) {
+          const decrypted = await decryptMessage(text, key);
+          if (decrypted) {
+            displayText = decrypted;
+          } else {
+            displayText = '🔒 [Decryption failed — wrong key or corrupted]';
+            decryptionFailed = true;
+          }
+        } else {
+          displayText = '🔒 [Encrypted — enter secret key to decrypt]';
+          decryptionFailed = true;
+        }
+      }
+      
+      displayMessage(displayText, 'received', encrypted, decryptionFailed);
+    }
+    
     function displayMessage(text, type, wasEncrypted = false, decryptionFailed = false) {
-      // Clear empty state
       if (messagesEl.children.length === 1 && messagesEl.children[0].classList.contains('empty-state')) {
         messagesEl.innerHTML = '';
       }
-
+      
       const msgDiv = document.createElement('div');
       msgDiv.className = `message ${type}`;
       const time = new Date().toLocaleTimeString();
-
+      
       let badge = '';
       if (wasEncrypted && type === 'sent') {
         badge = '<span class="badge badge-encrypted">🔒 Encrypted</span>';
@@ -519,12 +546,12 @@
       } else if (decryptionFailed) {
         badge = '<span class="badge badge-warning">⚠️ Key issue</span>';
       }
-
+      
       msgDiv.innerHTML = `${escapeHtml(text)}<small>${time} ${badge}</small>`;
       messagesEl.appendChild(msgDiv);
       messagesEl.scrollTop = messagesEl.scrollHeight;
     }
-
+    
     function addSystemMessage(text) {
       if (messagesEl.children.length === 1 && messagesEl.children[0].classList.contains('empty-state')) {
         messagesEl.innerHTML = '';
@@ -535,42 +562,37 @@
       msgDiv.style.color = '#999';
       msgDiv.style.padding = '6px';
       msgDiv.style.margin = '4px 0';
-      msgDiv.innerHTML = `⚡ ${text}`;
+      msgDiv.innerHTML = `⚡ ${escapeHtml(text)}`;
       messagesEl.appendChild(msgDiv);
       messagesEl.scrollTop = messagesEl.scrollHeight;
     }
-
+    
     function clearMessages() {
       messagesEl.innerHTML = '';
     }
-
+    
     function escapeHtml(text) {
       const div = document.createElement('div');
       div.textContent = text;
       return div.innerHTML;
     }
-
+    
     // ==========================================
     // UI HELPERS
     // ==========================================
-
+    
     function updateStatus(state, message) {
       statusEl.className = `status status-${state}`;
       statusEl.innerHTML = message;
     }
-
+    
     function enableChat(enabled) {
       chatInput.disabled = !enabled;
       sendBtn.disabled = !enabled;
-      chatInput.placeholder = enabled ? 'Type a message...' : 'Join a room first';
+      chatInput.placeholder = enabled ? 'Type a message...' : 'Connect to a peer first';
     }
-
-    function enableJoin(enabled) {
-      joinBtn.disabled = !enabled;
-    }
-
+    
     function showAlert(msg) {
-      // Simple toast-style alert
       const existing = document.querySelector('.toast-alert');
       if (existing) existing.remove();
       const div = document.createElement('div');
@@ -585,32 +607,29 @@
       document.body.appendChild(div);
       setTimeout(() => div.remove(), 3000);
     }
-
+    
     // ==========================================
     // EVENT LISTENERS
     // ==========================================
-
+    
     chatInput.addEventListener('keypress', (e) => {
-      if (e.key === 'Enter' && !sendBtn.disabled) sendMessage();
+      if (e.key === 'Enter' && !sendBtn.disabled && isConnected) {
+        sendMessage();
+      }
     });
-
+    
     encryptCheckbox.addEventListener('change', () => {
       isEncryptionOn = encryptCheckbox.checked;
       encryptionStatus.textContent = isEncryptionOn ? '🔒 Encrypted' : '🔓 Unencrypted';
       encryptionIndicator.textContent = isEncryptionOn ? 'Active' : 'Not active';
       encryptionIndicator.style.color = isEncryptionOn ? '#28a745' : '#999';
     });
-
+    
     // ==========================================
     // INIT
     // ==========================================
-
-    // Generate room ID on load
-    myPeerIdEl.textContent = generateRoomId();
-    document.getElementById('targetRoomId').value = myPeerIdEl.textContent;
-
-    // Connect
-    connectSocket();
+    
+    initPeer();
   </script>
 </body>
 </html>
