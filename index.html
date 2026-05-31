@@ -45,6 +45,7 @@
     button.secondary { background: linear-gradient(135deg, #6c757d, #495057); }
     button.danger { background: linear-gradient(135deg, #dc3545, #c82333); }
     button.success { background: linear-gradient(135deg, #28a745, #1e7e34); }
+    button.warning { background: linear-gradient(135deg, #ff9800, #fb8c00); }
     .peer-id-box {
       background: linear-gradient(135deg, #f8f9ff, #eef0ff); border: 1px solid #d0d5ff;
       border-radius: 14px; padding: 18px; margin-bottom: 20px; text-align: center;
@@ -53,6 +54,25 @@
       font-family: 'Courier New', monospace; font-size: 13px; background: white;
       padding: 12px 14px; border-radius: 10px; border: 1px solid #e0e0e0;
       word-break: break-all; margin-top: 10px; user-select: all;
+    }
+    .room-selector {
+      display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap;
+    }
+    .room-btn {
+      flex: 1; background: #e9ecef; color: #495057; border: 2px solid transparent;
+    }
+    .room-btn.active {
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      color: white;
+      border-color: #667eea;
+    }
+    .room-btn.public { background: #d4edda; color: #155724; }
+    .room-btn.public.active { background: linear-gradient(135deg, #28a745, #20c997); }
+    .room-btn.private { background: #cfe2ff; color: #004085; }
+    .room-btn.private.active { background: linear-gradient(135deg, #667eea, #764ba2); }
+    .join-key-section {
+      background: #f8f9fa; border-radius: 12px; padding: 15px;
+      margin-top: 15px; border: 1px solid #e0e0e0;
     }
     .chat-box {
       border: 1px solid #e0e0e0; border-radius: 14px; height: 340px;
@@ -77,6 +97,7 @@
     .badge-encrypted { background: #ff9800; color: white; }
     .badge-decrypted { background: #4caf50; color: white; }
     .badge-warning { background: #f44336; color: white; }
+    .badge-room { background: #6c757d; color: white; }
     .flex-row { display: flex; gap: 10px; align-items: center; }
     .flex-row input { flex: 1; margin-bottom: 0; }
     .info-box {
@@ -91,13 +112,10 @@
     .connection-info {
       display: flex; align-items: center; justify-content: space-between; margin-top: 10px;
       padding: 10px 14px; background: #f8f9fa; border-radius: 10px; border: 1px solid #e8e8e8; font-size: 13px; color: #555;
+      flex-wrap: wrap; gap: 10px;
     }
     .empty-state { text-align: center; color: #aaa; padding: 40px 20px; font-size: 14px; }
     .empty-state .icon { font-size: 40px; margin-bottom: 10px; }
-    .key-display {
-      background: #1a1a2e; color: #00ff88; padding: 12px; border-radius: 8px;
-      font-family: monospace; font-size: 12px; margin-top: 8px; word-break: break-all;
-    }
     .storage-info {
       display: flex; align-items: center; justify-content: space-between;
       padding: 8px 12px; background: #e9ecef; border-radius: 10px;
@@ -111,39 +129,75 @@
       text-decoration: underline; transform: none;
       box-shadow: none; background: none;
     }
+    @media (max-width: 600px) {
+      .room-selector { flex-direction: column; }
+      .message { max-width: 85%; }
+    }
   </style>
 </head>
 <body>
   <div class="container">
     <div class="card">
       <h1>🔐 P2P Secret Messenger</h1>
-      <div class="subtitle">End-to-End Encrypted • AES-256-GCM • Real-time P2P • Messages persist 24h</div>
+      <div class="subtitle">End-to-End Encrypted • Public/Private Rooms • Messages persist 24h</div>
 
       <div class="status status-offline" id="status">🔴 Disconnected — Initializing...</div>
 
-      <div class="peer-id-box">
-        <strong>📱 YOUR PEER ID — Share this to connect directly</strong>
-        <div class="peer-id" id="myPeerId">Generating...</div>
-        <div class="flex-row" style="margin-top: 12px; justify-content: center;">
-          <button onclick="copyPeerId()">📋 Copy Peer ID</button>
-          <button class="secondary" onclick="generateNewPeerId()">🔄 New ID</button>
+      <!-- Room Type Selector -->
+      <div class="room-selector">
+        <button class="room-btn public" id="publicRoomBtn" onclick="selectRoomType('public')">🌍 Public Room</button>
+        <button class="room-btn private" id="privateRoomBtn" onclick="selectRoomType('private')">🔒 Private Room (1-on-1)</button>
+      </div>
+
+      <!-- Public Room Section -->
+      <div id="publicRoomSection" style="display: none;">
+        <div class="peer-id-box">
+          <strong>🌍 PUBLIC ROOM</strong>
+          <div class="peer-id" id="publicRoomId">Creating room...</div>
+          <div class="flex-row" style="margin-top: 12px; justify-content: center;">
+            <button onclick="copyPublicRoomId()">📋 Copy Room ID</button>
+            <button class="secondary" onclick="generateNewPublicRoom()">🔄 New Room</button>
+          </div>
+        </div>
+
+        <div class="join-key-section">
+          <label>🔑 Room Join Key (required for others to join)</label>
+          <div class="flex-row">
+            <input type="text" id="roomJoinKey" placeholder="Enter a secret key for this room..." readonly>
+            <button class="secondary" onclick="generateJoinKey()">🎲 Generate Key</button>
+            <button class="secondary" onclick="copyJoinKey()">📋 Copy Key</button>
+          </div>
+          <div class="info-box" style="margin-top: 10px; font-size: 12px;">
+            ⚠️ Share this Room ID AND Join Key with others. Both are required to enter the room.
+          </div>
+        </div>
+
+        <div class="input-group" style="margin-top: 15px;">
+          <label>🔗 Or Join a Public Room</label>
+          <div class="flex-row">
+            <input type="text" id="targetPublicRoomId" placeholder="Paste Room ID">
+            <input type="password" id="targetRoomKey" placeholder="Join Key">
+            <button onclick="joinPublicRoom()">Join Room</button>
+          </div>
         </div>
       </div>
 
-      <div class="grid-2">
-        <div class="input-group">
-          <label>🔗 Connect to Peer</label>
-          <div class="flex-row">
-            <input type="text" id="targetPeerId" placeholder="Paste Peer ID here...">
-            <button onclick="connectToPeer()" id="connectBtn">Connect</button>
+      <!-- Private Room Section -->
+      <div id="privateRoomSection" style="display: none;">
+        <div class="peer-id-box">
+          <strong>🔒 YOUR PRIVATE PEER ID</strong>
+          <div class="peer-id" id="myPrivatePeerId">Generating...</div>
+          <div class="flex-row" style="margin-top: 12px; justify-content: center;">
+            <button onclick="copyPrivatePeerId()">📋 Copy Peer ID</button>
+            <button class="secondary" onclick="generateNewPrivatePeerId()">🔄 New ID</button>
           </div>
         </div>
+
         <div class="input-group">
-          <label>🔑 Secret Key (AES-256-GCM)</label>
-          <input type="password" id="secretKey" placeholder="e.g. MySup3rS3cr3tK3y!">
-          <div class="flex-row" style="margin-top: 8px;">
-            <button class="secondary" onclick="generateKey()" style="font-size: 12px; padding: 8px 14px;">🎲 Generate Key</button>
-            <button class="secondary" onclick="toggleKeyVisibility()" id="toggleKeyBtn" style="font-size: 12px; padding: 8px 14px;">👁 Show</button>
+          <label>🔗 Connect to Private Peer</label>
+          <div class="flex-row">
+            <input type="text" id="targetPrivatePeerId" placeholder="Paste Peer ID here...">
+            <button onclick="connectToPrivatePeer()" id="connectBtn">Connect</button>
           </div>
         </div>
       </div>
@@ -154,9 +208,10 @@
       </div>
 
       <div class="connection-info">
-        <span><span class="label">Connection:</span> <span id="connStatusLabel">Not connected</span></span>
-        <span><span class="label">Peer:</span> <span id="connectedPeerLabel">None</span></span>
-        <button class="danger" onclick="disconnect()" id="disconnectBtn" disabled style="padding: 6px 14px; font-size: 12px;">✕ Disconnect</button>
+        <span><span class="label">Room Type:</span> <strong id="roomTypeLabel">Not selected</strong></span>
+        <span><span class="label">Status:</span> <span id="connStatusLabel">Not connected</span></span>
+        <span><span class="label">Participants:</span> <span id="participantCount">0</span></span>
+        <button class="danger" onclick="leaveCurrentRoom()" id="leaveRoomBtn" disabled style="padding: 6px 14px; font-size: 12px;">✕ Leave</button>
       </div>
 
       <div class="storage-info">
@@ -177,12 +232,12 @@
         <div class="messages" id="messages">
           <div class="empty-state">
             <div class="icon">💬</div>
-            <div>Not connected to any peer.</div>
-            <div style="font-size: 12px; margin-top: 6px;">Share your Peer ID and connect to start chatting.</div>
+            <div>Select a room type to start.</div>
+            <div style="font-size: 12px; margin-top: 6px;">Public rooms allow multiple participants with a join key.</div>
           </div>
         </div>
         <div class="chat-input">
-          <input type="text" id="chatInput" placeholder="Connect to a peer first..." disabled>
+          <input type="text" id="chatInput" placeholder="Select a room first..." disabled>
           <button onclick="sendMessage()" id="sendBtn" disabled>Send</button>
         </div>
       </div>
@@ -196,8 +251,7 @@
       </div>
 
       <div class="info-box" style="margin-top: 10px;">
-        💡 <strong>Tip:</strong> Turn on encryption and enter the same secret key on both sides.
-        Messages are encrypted with AES-256-GCM before sending. Messages survive refresh and auto-delete after 24 hours.
+        💡 <strong>Features:</strong> Public rooms (multi-user with join key) | Private 1-on-1 rooms | AES-256-GCM encryption | Messages persist through refresh | Auto-delete after 24 hours
       </div>
     </div>
   </div>
@@ -205,36 +259,40 @@
   <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
   <script>
     // ==========================================
-    // P2P CONFIGURATION
+    // CONFIGURATION
     // ==========================================
     let peer = null;
-    let currentConnection = null;
+    let currentRoomType = null; // 'public' or 'private'
+    let currentConnections = []; // For public rooms (multiple connections)
+    let privateConnection = null; // For private 1-on-1
     let myPeerId = null;
-    let connectedPeerId = null;
-    let isConnected = false;
+    let currentRoomId = null;
+    let currentRoomKey = null;
+    let roomParticipants = new Set();
+    
     let isEncryptionOn = false;
 
-    // Storage key for messages
+    // Storage
     const STORAGE_KEY = 'p2p_chat_messages';
+    const ROOM_STORAGE_KEY = 'p2p_room_info';
     const EXPIRY_HOURS = 24;
 
     // DOM refs
     const statusEl = document.getElementById('status');
-    const myPeerIdEl = document.getElementById('myPeerId');
     const messagesEl = document.getElementById('messages');
     const chatInput = document.getElementById('chatInput');
     const sendBtn = document.getElementById('sendBtn');
-    const connectBtn = document.getElementById('connectBtn');
-    const disconnectBtn = document.getElementById('disconnectBtn');
+    const leaveRoomBtn = document.getElementById('leaveRoomBtn');
     const secretKeyInput = document.getElementById('secretKey');
     const encryptCheckbox = document.getElementById('encryptMessages');
     const encryptionStatus = document.getElementById('encryptionStatus');
     const encryptionIndicator = document.getElementById('encryptionIndicator');
     const connStatusLabel = document.getElementById('connStatusLabel');
-    const connectedPeerLabel = document.getElementById('connectedPeerLabel');
+    const roomTypeLabel = document.getElementById('roomTypeLabel');
+    const participantCount = document.getElementById('participantCount');
 
     // ==========================================
-    // MESSAGE STORAGE (Persistent + 24h expiry)
+    // MESSAGE STORAGE
     // ==========================================
 
     function saveMessage(messageData) {
@@ -243,6 +301,7 @@
         ...messageData,
         id: Date.now() + '_' + Math.random().toString(36).substr(2, 9),
         timestamp: Date.now(),
+        roomId: currentRoomId,
         expiry: Date.now() + (EXPIRY_HOURS * 60 * 60 * 1000)
       });
       localStorage.setItem(STORAGE_KEY, JSON.stringify(messages));
@@ -255,8 +314,6 @@
       
       let messages = JSON.parse(stored);
       const now = Date.now();
-      
-      // Filter out expired messages (>24 hours old)
       const validMessages = messages.filter(msg => msg.expiry > now);
       
       if (validMessages.length !== messages.length) {
@@ -266,22 +323,19 @@
       return validMessages;
     }
 
-    function loadMessagesFromStorage() {
+    function loadMessagesForCurrentRoom() {
       const messages = getStoredMessages();
-      if (messages.length > 0) {
+      const roomMessages = messages.filter(msg => msg.roomId === currentRoomId);
+      if (roomMessages.length > 0) {
         clearMessagesUI();
-        // Sort by timestamp
-        messages.sort((a, b) => a.timestamp - b.timestamp);
-        messages.forEach(msg => {
-          renderMessageFromStorage(msg);
-        });
-        return messages.length;
+        roomMessages.sort((a, b) => a.timestamp - b.timestamp);
+        roomMessages.forEach(msg => renderMessageFromStorage(msg));
+        return roomMessages.length;
       }
       return 0;
     }
 
     function renderMessageFromStorage(msg) {
-      // Clear empty state
       if (messagesEl.children.length === 1 && messagesEl.children[0].classList.contains('empty-state')) {
         messagesEl.innerHTML = '';
       }
@@ -311,38 +365,21 @@
     }
 
     function clearAllMessages() {
-      if (confirm('⚠️ Delete ALL messages? This cannot be undone.')) {
+      if (confirm('⚠️ Delete ALL messages from ALL rooms? This cannot be undone.')) {
         localStorage.removeItem(STORAGE_KEY);
         clearMessagesUI();
-        addSystemMessage('🗑️ All messages cleared');
-        // Show empty state
+        addSystemMessage('🗑️ All messages cleared from storage');
         if (messagesEl.children.length === 0) {
           messagesEl.innerHTML = `
             <div class="empty-state">
               <div class="icon">💬</div>
               <div>No messages yet.</div>
-              <div style="font-size: 12px; margin-top: 6px;">Start chatting to see messages here.</div>
+              <div style="font-size: 12px; margin-top: 6px;">Select a room to start chatting.</div>
             </div>
           `;
         }
       }
     }
-
-    // Run expiry check every hour
-    setInterval(() => {
-      const oldCount = getStoredMessages().length;
-      getStoredMessages(); // This triggers cleanup
-      const newCount = getStoredMessages().length;
-      if (oldCount !== newCount) {
-        // Reload messages if any were deleted
-        const currentMessages = [...messagesEl.querySelectorAll('.message')];
-        if (currentMessages.length > 0) {
-          clearMessagesUI();
-          loadMessagesFromStorage();
-          addSystemMessage(`🕐 Messages older than ${EXPIRY_HOURS} hours automatically deleted`);
-        }
-      }
-    }, 60 * 60 * 1000); // Check every hour
 
     // ==========================================
     // AES-256-GCM ENCRYPTION
@@ -400,55 +437,45 @@
     }
 
     // ==========================================
-    // PEER CONNECTION
+    // ROOM MANAGEMENT
     // ==========================================
 
-    function generatePeerId() {
-      const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
-      let id = '';
-      for (let i = 0; i < 8; i++) {
-        id += chars.charAt(Math.floor(Math.random() * chars.length));
-      }
-      return 'p2p_' + id;
-    }
-
-    function generateNewPeerId() {
-      const newId = generatePeerId();
-      myPeerIdEl.textContent = newId;
-      showAlert('New Peer ID generated! Share this to connect.');
-    }
-
-    function copyPeerId() {
-      const peerId = myPeerIdEl.textContent;
-      if (peerId && peerId !== 'Generating...') {
-        navigator.clipboard.writeText(peerId);
-        showAlert('Peer ID copied! Share it with your chat partner.');
-      }
-    }
-
-    function generateKey() {
-      const key = Array.from(crypto.getRandomValues(new Uint8Array(16)))
-        .map(b => String.fromCharCode(33 + (b % 89)))
-        .join('');
-      secretKeyInput.value = key;
-    }
-
-    function toggleKeyVisibility() {
-      if (secretKeyInput.type === 'password') {
-        secretKeyInput.type = 'text';
-        document.getElementById('toggleKeyBtn').textContent = '👁 Hide';
-      } else {
-        secretKeyInput.type = 'password';
-        document.getElementById('toggleKeyBtn').textContent = '👁 Show';
-      }
-    }
-
-    function initPeer() {
-      const randomId = generatePeerId();
-      myPeerId = randomId;
-      myPeerIdEl.textContent = randomId;
+    function selectRoomType(type) {
+      currentRoomType = type;
+      leaveCurrentRoom();
       
-      updateStatus('connecting', '🟡 Connecting to P2P network...');
+      if (type === 'public') {
+        document.getElementById('publicRoomSection').style.display = 'block';
+        document.getElementById('privateRoomSection').style.display = 'none';
+        document.getElementById('publicRoomBtn').classList.add('active');
+        document.getElementById('privateRoomBtn').classList.remove('active');
+        roomTypeLabel.textContent = 'Public Room';
+        initPublicRoom();
+      } else {
+        document.getElementById('publicRoomSection').style.display = 'none';
+        document.getElementById('privateRoomSection').style.display = 'block';
+        document.getElementById('privateRoomBtn').classList.add('active');
+        document.getElementById('publicRoomBtn').classList.remove('active');
+        roomTypeLabel.textContent = 'Private 1-on-1';
+        initPrivateRoom();
+      }
+    }
+
+    // ==========================================
+    // PUBLIC ROOM (Multi-user with join key)
+    // ==========================================
+
+    function initPublicRoom() {
+      if (!peer) {
+        initPeerForPublic();
+      } else {
+        setupPublicRoom();
+      }
+    }
+
+    function initPeerForPublic() {
+      const randomId = 'pub_' + Math.random().toString(36).substring(2, 10) + Date.now().toString(36);
+      myPeerId = randomId;
       
       peer = new Peer(randomId, {
         host: '0.peerjs.com',
@@ -458,156 +485,331 @@
       });
       
       peer.on('open', () => {
-        updateStatus('online', '🟢 Online - Ready to connect');
-        connStatusLabel.textContent = 'Online';
-        // Load saved messages
-        const msgCount = loadMessagesFromStorage();
-        if (msgCount > 0) {
-          addSystemMessage(`📜 Loaded ${msgCount} saved message(s) from storage`);
-        }
+        setupPublicRoom();
       });
       
       peer.on('connection', (conn) => {
-        console.log('Incoming connection from:', conn.peer);
-        handleConnection(conn);
+        handlePublicConnection(conn);
       });
       
       peer.on('error', (err) => {
         console.error('Peer error:', err);
-        if (err.type === 'peer-unavailable') {
-          updateStatus('offline', '❌ Peer not found');
-        } else if (err.type === 'network') {
-          updateStatus('offline', '❌ Network error - Check connection');
-        } else {
-          updateStatus('offline', '❌ Error: ' + err.message);
-        }
-      });
-      
-      peer.on('disconnected', () => {
-        if (isConnected) {
-          disconnect();
-        }
-        updateStatus('offline', '🔴 Disconnected - Reconnecting...');
-        peer.reconnect();
+        updateStatus('offline', '❌ Connection error');
       });
     }
-    
-    function handleConnection(conn) {
-      currentConnection = conn;
-      connectedPeerId = conn.peer;
-      isConnected = true;
+
+    function setupPublicRoom() {
+      updateStatus('online', '🟢 Public Room Ready');
+      document.getElementById('publicRoomId').textContent = myPeerId;
+      currentRoomId = myPeerId;
       
-      updateStatus('online', `✅ Connected to ${conn.peer.substring(0, 12)}...`);
-      connStatusLabel.textContent = 'Connected to peer';
-      connectedPeerLabel.textContent = conn.peer.substring(0, 16) + '...';
-      enableChat(true);
-      disconnectBtn.disabled = false;
-      connectBtn.disabled = true;
-      addSystemMessage('🔐 Connected to peer! Start chatting securely.');
-      
-      conn.on('data', async (data) => {
-        await receiveMessage(data);
-      });
-      
-      conn.on('close', () => {
-        disconnect();
-      });
-      
-      conn.on('error', (err) => {
-        console.error('Connection error:', err);
-        addSystemMessage('❌ Connection error occurred');
-      });
-    }
-    
-    function connectToPeer() {
-      const targetId = document.getElementById('targetPeerId').value.trim();
-      
-      if (!targetId) {
-        showAlert('Please enter a Peer ID to connect to');
-        return;
+      // Generate a join key if not exists
+      if (!currentRoomKey) {
+        generateJoinKey();
       }
       
-      if (targetId === myPeerIdEl.textContent) {
-        showAlert('You cannot connect to yourself!');
+      connStatusLabel.textContent = 'Waiting for participants';
+      enableChat(true);
+      leaveRoomBtn.disabled = false;
+      
+      loadMessagesForCurrentRoom();
+    }
+
+    function generateJoinKey() {
+      const key = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 8);
+      currentRoomKey = key;
+      document.getElementById('roomJoinKey').value = key;
+    }
+
+    function copyJoinKey() {
+      navigator.clipboard.writeText(currentRoomKey);
+      showAlert('Join Key copied!');
+    }
+
+    function copyPublicRoomId() {
+      navigator.clipboard.writeText(myPeerId);
+      showAlert('Room ID copied!');
+    }
+
+    function generateNewPublicRoom() {
+      if (peer) {
+        peer.destroy();
+      }
+      currentRoomKey = null;
+      initPeerForPublic();
+    }
+
+    function joinPublicRoom() {
+      const roomId = document.getElementById('targetPublicRoomId').value.trim();
+      const joinKey = document.getElementById('targetRoomKey').value.trim();
+      
+      if (!roomId || !joinKey) {
+        showAlert('Please enter both Room ID and Join Key');
         return;
       }
       
       if (!peer) {
-        showAlert('Still initializing, please wait...');
+        const randomId = 'user_' + Math.random().toString(36).substring(2, 10);
+        peer = new Peer(randomId, {
+          host: '0.peerjs.com',
+          port: 443,
+          secure: true,
+          path: '/'
+        });
+        
+        peer.on('open', () => {
+          connectToPublicRoom(roomId, joinKey);
+        });
+      } else {
+        connectToPublicRoom(roomId, joinKey);
+      }
+    }
+
+    function connectToPublicRoom(roomId, joinKey) {
+      currentRoomId = roomId;
+      currentRoomKey = joinKey;
+      
+      const conn = peer.connect(roomId, { reliable: true, serialization: 'json' });
+      currentConnections.push(conn);
+      
+      conn.on('open', () => {
+        updateStatus('online', `🟢 Connected to public room`);
+        connStatusLabel.textContent = 'Connected to room';
+        roomTypeLabel.textContent = 'Public Room';
+        enableChat(true);
+        leaveRoomBtn.disabled = false;
+        
+        // Send join key for verification
+        conn.send({ type: 'auth', key: joinKey });
+        
+        loadMessagesForCurrentRoom();
+        addSystemMessage(`✅ Joined public room! Share messages with all participants.`);
+      });
+      
+      conn.on('data', async (data) => {
+        await handlePublicMessage(data, conn);
+      });
+      
+      conn.on('close', () => {
+        addSystemMessage('🔌 A participant left the room');
+        roomParticipants.delete(conn.peer);
+        updateParticipantCount();
+      });
+    }
+
+    function handlePublicConnection(conn) {
+      let authenticated = false;
+      
+      conn.on('data', async (data) => {
+        if (data.type === 'auth' && !authenticated) {
+          if (data.key === currentRoomKey) {
+            authenticated = true;
+            currentConnections.push(conn);
+            roomParticipants.add(conn.peer);
+            updateParticipantCount();
+            addSystemMessage(`👤 New participant joined the room!`);
+            conn.send({ type: 'auth_success', message: 'Authenticated!' });
+          } else {
+            conn.send({ type: 'auth_fail', message: 'Invalid join key' });
+            conn.close();
+          }
+        } else if (authenticated && data.type === 'message') {
+          await handlePublicMessage(data, conn);
+        }
+      });
+    }
+
+    async function handlePublicMessage(data, senderConn) {
+      if (data.type === 'message') {
+        let displayText = data.text;
+        let decryptionFailed = false;
+        
+        if (data.encrypted && encryptCheckbox.checked) {
+          const key = secretKeyInput.value;
+          if (key) {
+            const decrypted = await decryptMessage(data.text, key);
+            if (decrypted) {
+              displayText = decrypted;
+            } else {
+              displayText = '🔒 [Decryption failed — wrong key]';
+              decryptionFailed = true;
+            }
+          } else {
+            displayText = '🔒 [Encrypted — enter secret key to decrypt]';
+            decryptionFailed = true;
+          }
+        }
+        
+        const messageData = {
+          text: displayText,
+          type: 'received',
+          wasEncrypted: data.encrypted,
+          decryptionFailed: decryptionFailed,
+          timestamp: Date.now(),
+          roomId: currentRoomId
+        };
+        saveMessage(messageData);
+        displayMessage(displayText, 'received', data.encrypted, decryptionFailed);
+      }
+    }
+
+    function broadcastToRoom(message, encrypted) {
+      currentConnections.forEach(conn => {
+        if (conn.open) {
+          conn.send({ type: 'message', text: message, encrypted: encrypted, timestamp: Date.now() });
+        }
+      });
+    }
+
+    function updateParticipantCount() {
+      participantCount.textContent = roomParticipants.size + 1;
+    }
+
+    // ==========================================
+    // PRIVATE ROOM (1-on-1)
+    // ==========================================
+
+    function initPrivateRoom() {
+      if (peer && currentRoomType !== 'private') {
+        peer.destroy();
+      }
+      
+      const randomId = 'priv_' + Math.random().toString(36).substring(2, 10) + Date.now().toString(36);
+      myPeerId = randomId;
+      document.getElementById('myPrivatePeerId').textContent = randomId;
+      
+      peer = new Peer(randomId, {
+        host: '0.peerjs.com',
+        port: 443,
+        secure: true,
+        path: '/'
+      });
+      
+      peer.on('open', () => {
+        updateStatus('online', '🟢 Private Room Ready');
+        connStatusLabel.textContent = 'Waiting for connection';
+        currentRoomId = randomId;
+      });
+      
+      peer.on('connection', (conn) => {
+        handlePrivateConnection(conn);
+      });
+      
+      peer.on('error', (err) => {
+        console.error('Peer error:', err);
+      });
+    }
+
+    function generateNewPrivatePeerId() {
+      if (peer) {
+        peer.destroy();
+      }
+      initPrivateRoom();
+    }
+
+    function copyPrivatePeerId() {
+      navigator.clipboard.writeText(document.getElementById('myPrivatePeerId').textContent);
+      showAlert('Private Peer ID copied!');
+    }
+
+    function connectToPrivatePeer() {
+      const targetId = document.getElementById('targetPrivatePeerId').value.trim();
+      
+      if (!targetId) {
+        showAlert('Please enter a Peer ID');
         return;
       }
       
-      updateStatus('connecting', '🟡 Connecting to peer...');
+      if (!peer) {
+        initPrivateRoom();
+        setTimeout(() => connectToPrivatePeer(), 1000);
+        return;
+      }
       
-      const conn = peer.connect(targetId, {
-        reliable: true,
-        serialization: 'json'
-      });
-      
-      currentConnection = conn;
-      connectedPeerId = targetId;
+      const conn = peer.connect(targetId, { reliable: true, serialization: 'json' });
+      privateConnection = conn;
+      currentRoomId = targetId;
       
       conn.on('open', () => {
-        isConnected = true;
         updateStatus('online', `✅ Connected to ${targetId.substring(0, 12)}...`);
         connStatusLabel.textContent = 'Connected to peer';
-        connectedPeerLabel.textContent = targetId.substring(0, 16) + '...';
+        roomTypeLabel.textContent = 'Private 1-on-1';
         enableChat(true);
-        disconnectBtn.disabled = false;
-        connectBtn.disabled = true;
+        leaveRoomBtn.disabled = false;
+        participantCount.textContent = '2';
+        loadMessagesForCurrentRoom();
         addSystemMessage('🔐 Connected to peer! Start chatting securely.');
       });
       
       conn.on('data', async (data) => {
-        await receiveMessage(data);
+        await receivePrivateMessage(data);
       });
       
       conn.on('close', () => {
-        disconnect();
+        addSystemMessage('🔌 Peer disconnected');
+        participantCount.textContent = '1';
+      });
+    }
+
+    function handlePrivateConnection(conn) {
+      privateConnection = conn;
+      currentRoomId = conn.peer;
+      participantCount.textContent = '2';
+      
+      updateStatus('online', `✅ Connected to ${conn.peer.substring(0, 12)}...`);
+      connStatusLabel.textContent = 'Connected to peer';
+      enableChat(true);
+      leaveRoomBtn.disabled = false;
+      loadMessagesForCurrentRoom();
+      addSystemMessage('🔐 Connected to peer! Start chatting securely.');
+      
+      conn.on('data', async (data) => {
+        await receivePrivateMessage(data);
       });
       
-      conn.on('error', (err) => {
-        console.error('Connection error:', err);
-        updateStatus('offline', '❌ Connection failed');
-        addSystemMessage('❌ Failed to connect to peer');
-        disconnect();
+      conn.on('close', () => {
+        addSystemMessage('🔌 Peer disconnected');
+        participantCount.textContent = '1';
       });
+    }
+
+    async function receivePrivateMessage(data) {
+      let displayText = data.text;
+      let decryptionFailed = false;
       
-      setTimeout(() => {
-        if (!isConnected && currentConnection === conn) {
-          updateStatus('offline', '❌ Connection timeout');
-          addSystemMessage('❌ Connection timed out. Make sure the peer is online.');
-          disconnect();
+      if (data.encrypted && encryptCheckbox.checked) {
+        const key = secretKeyInput.value;
+        if (key) {
+          const decrypted = await decryptMessage(data.text, key);
+          if (decrypted) {
+            displayText = decrypted;
+          } else {
+            displayText = '🔒 [Decryption failed — wrong key]';
+            decryptionFailed = true;
+          }
+        } else {
+          displayText = '🔒 [Encrypted — enter secret key to decrypt]';
+          decryptionFailed = true;
         }
-      }, 15000);
-    }
-    
-    function disconnect() {
-      if (currentConnection) {
-        currentConnection.close();
-        currentConnection = null;
-      }
-      isConnected = false;
-      connectedPeerId = null;
-      updateStatus('online', '🟢 Online - Ready to connect');
-      connStatusLabel.textContent = 'Online (not connected)';
-      connectedPeerLabel.textContent = 'None';
-      enableChat(false);
-      disconnectBtn.disabled = true;
-      connectBtn.disabled = false;
-      addSystemMessage('🔌 Disconnected from peer');
-    }
-    
-    // ==========================================
-    // MESSAGING
-    // ==========================================
-    
-    async function sendMessage() {
-      if (!isConnected || !currentConnection) {
-        showAlert('Connect to a peer first!');
-        return;
       }
       
+      const messageData = {
+        text: displayText,
+        type: 'received',
+        wasEncrypted: data.encrypted,
+        decryptionFailed: decryptionFailed,
+        timestamp: Date.now(),
+        roomId: currentRoomId
+      };
+      saveMessage(messageData);
+      displayMessage(displayText, 'received', data.encrypted, decryptionFailed);
+    }
+
+    // ==========================================
+    // COMMON MESSAGING FUNCTIONS
+    // ==========================================
+
+    async function sendMessage() {
       const message = chatInput.value.trim();
       if (!message) return;
       
@@ -630,60 +832,29 @@
         }
       }
       
-      currentConnection.send({
-        text: finalMessage,
-        encrypted: wasEncrypted,
-        timestamp: Date.now()
-      });
+      if (currentRoomType === 'public') {
+        broadcastToRoom(finalMessage, wasEncrypted);
+      } else if (currentRoomType === 'private' && privateConnection && privateConnection.open) {
+        privateConnection.send({ text: finalMessage, encrypted: wasEncrypted, timestamp: Date.now() });
+      } else {
+        showAlert('Not connected to any room!');
+        return;
+      }
       
-      // Save and display sent message
       const messageData = {
         text: message,
         type: 'sent',
         wasEncrypted: wasEncrypted,
         decryptionFailed: false,
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        roomId: currentRoomId
       };
       saveMessage(messageData);
       displayMessage(message, 'sent', wasEncrypted);
       chatInput.value = '';
     }
-    
-    async function receiveMessage(data) {
-      const { text, encrypted } = data;
-      let displayText = text;
-      let decryptionFailed = false;
-      
-      if (encrypted && encryptCheckbox.checked) {
-        const key = secretKeyInput.value;
-        if (key) {
-          const decrypted = await decryptMessage(text, key);
-          if (decrypted) {
-            displayText = decrypted;
-          } else {
-            displayText = '🔒 [Decryption failed — wrong key or corrupted]';
-            decryptionFailed = true;
-          }
-        } else {
-          displayText = '🔒 [Encrypted — enter secret key to decrypt]';
-          decryptionFailed = true;
-        }
-      }
-      
-      // Save received message
-      const messageData = {
-        text: displayText,
-        type: 'received',
-        wasEncrypted: encrypted,
-        decryptionFailed: decryptionFailed,
-        timestamp: Date.now()
-      };
-      saveMessage(messageData);
-      displayMessage(displayText, 'received', encrypted, decryptionFailed);
-    }
-    
+
     function displayMessage(text, type, wasEncrypted = false, decryptionFailed = false) {
-      // Clear empty state
       if (messagesEl.children.length === 1 && messagesEl.children[0].classList.contains('empty-state')) {
         messagesEl.innerHTML = '';
       }
@@ -705,7 +876,7 @@
       messagesEl.appendChild(msgDiv);
       messagesEl.scrollTop = messagesEl.scrollHeight;
     }
-    
+
     function addSystemMessage(text) {
       if (messagesEl.children.length === 1 && messagesEl.children[0].classList.contains('empty-state')) {
         messagesEl.innerHTML = '';
@@ -720,28 +891,50 @@
       messagesEl.appendChild(msgDiv);
       messagesEl.scrollTop = messagesEl.scrollHeight;
     }
-    
-    function escapeHtml(text) {
-      const div = document.createElement('div');
-      div.textContent = text;
-      return div.innerHTML;
+
+    function leaveCurrentRoom() {
+      if (currentRoomType === 'public') {
+        currentConnections.forEach(conn => {
+          if (conn && conn.close) conn.close();
+        });
+        currentConnections = [];
+        roomParticipants.clear();
+      } else if (currentRoomType === 'private' && privateConnection) {
+        privateConnection.close();
+        privateConnection = null;
+      }
+      
+      currentRoomId = null;
+      participantCount.textContent = '0';
+      connStatusLabel.textContent = 'Not connected';
+      enableChat(false);
+      leaveRoomBtn.disabled = true;
+      
+      clearMessagesUI();
+      messagesEl.innerHTML = `
+        <div class="empty-state">
+          <div class="icon">💬</div>
+          <div>Left the room.</div>
+          <div style="font-size: 12px; margin-top: 6px;">Select a room to start chatting.</div>
+        </div>
+      `;
     }
-    
+
     // ==========================================
     // UI HELPERS
     // ==========================================
-    
+
     function updateStatus(state, message) {
       statusEl.className = `status status-${state}`;
       statusEl.innerHTML = message;
     }
-    
+
     function enableChat(enabled) {
       chatInput.disabled = !enabled;
       sendBtn.disabled = !enabled;
-      chatInput.placeholder = enabled ? 'Type a message...' : 'Connect to a peer first';
+      chatInput.placeholder = enabled ? 'Type a message...' : 'Join a room first';
     }
-    
+
     function showAlert(msg) {
       const existing = document.querySelector('.toast-alert');
       if (existing) existing.remove();
@@ -757,13 +950,36 @@
       document.body.appendChild(div);
       setTimeout(() => div.remove(), 3000);
     }
-    
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    function generateKey() {
+      const key = Array.from(crypto.getRandomValues(new Uint8Array(16)))
+        .map(b => String.fromCharCode(33 + (b % 89)))
+        .join('');
+      secretKeyInput.value = key;
+    }
+
+    function toggleKeyVisibility() {
+      if (secretKeyInput.type === 'password') {
+        secretKeyInput.type = 'text';
+        document.getElementById('toggleKeyBtn').textContent = '👁 Hide';
+      } else {
+        secretKeyInput.type = 'password';
+        document.getElementById('toggleKeyBtn').textContent = '👁 Show';
+      }
+    }
+
     // ==========================================
     // EVENT LISTENERS
     // ==========================================
-    
+
     chatInput.addEventListener('keypress', (e) => {
-      if (e.key === 'Enter' && !sendBtn.disabled && isConnected) {
+      if (e.key === 'Enter' && !sendBtn.disabled) {
         sendMessage();
       }
     });
@@ -774,12 +990,17 @@
       encryptionIndicator.textContent = isEncryptionOn ? 'Active' : 'Not active';
       encryptionIndicator.style.color = isEncryptionOn ? '#28a745' : '#999';
     });
-    
+
+    // Set default secret key input handlers
+    window.generateKey = generateKey;
+    window.toggleKeyVisibility = toggleKeyVisibility;
+
     // ==========================================
-    // INIT
+    // INITIALIZATION
     // ==========================================
-    
-    initPeer();
+
+    // Set default to public room
+    selectRoomType('public');
   </script>
 </body>
 </html>
